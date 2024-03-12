@@ -5,8 +5,12 @@
   window.Pusher = Pusher;
   let laravelEcho: Echo;
   let channelListener: any;
-
+  const wsHost = 'ec2-3-84-24-193.compute-1.amazonaws.com';
+  const wsHostLocal = 'localhost';
   const message = ref('');
+  const receiverId = ref('');
+  const receivedMessages = ref([]);
+
   const makeLogin = () => {
     fetch("http://localhost:8000/api/v1/login", {
       method: "POST",
@@ -14,7 +18,7 @@
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        email: "test@teste.com",
+        email: "teste@teste.com",
         password: "password",
       })
     }).then((response) => {
@@ -25,7 +29,7 @@
       laravelEcho = new Echo({
         broadcaster: 'pusher',
         key:'app-key',
-        wsHost: 'localhost',
+        wsHost: wsHostLocal,
         wsPort: 6001,
         wssPort: 6001,
         forceTLS: false,
@@ -46,12 +50,33 @@
     });
   };
 
+  const makeChat = () => {
+    fetch("http://localhost:8000/api/v1/chat/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + localStorage.getItem('token'),
+      }
+    }).then(response => {
+      return response.json();
+    }).then(data => {
+      console.log(data)
+      localStorage.setItem("chat_id", data.chat);
+      console.log("chat."+data.chat)
+        channelListener = laravelEcho.private('chat.'+data.chat).listen('.message-sent', (e) => {
+          console.log(e);
+          receivedMessages.value.push(e);
+        });
+
+    })
+  }
+
   const sendMessage = () => {
-    const chatId = "9b51f7dc-a3b8-434a-8e04-1a27d0fe7b27"
+    const chatId = localStorage.getItem('chat_id')
     const body = {
       message: message.value,
       profile_id: localStorage.getItem('user_id'),
-      reply_to: localStorage.getItem('user_id'),
+      reply_to: receiverId.value,
       chat_id: chatId,
     };
     fetch("http://localhost:8000/api/v1/chat", {
@@ -66,13 +91,6 @@
       return response.json();
     }).then(data => {
       console.log(data)
-      localStorage.setItem("chat_id", data.chat);
-      console.log("chat."+data.chat)
-      if(!channelListener) {
-        channelListener = laravelEcho.private('chat.'+chatId).listen('.message-sent', (e) => {
-          console.log(e);
-        });
-      }
     });
   };
 
@@ -89,20 +107,33 @@
 
   <main>
     <div class="container-fluid">
-      <div class="row">
-        <div class="col-12">
+      <div class="row d-flex justify-content-center align-items-center">
+        <div class="col-6">
           <form>
             <div class="mb-3">
-              <label for="message" class="form-label">Digite seu texto para mensagem</label>
-              <input type="text" class="form-control" id="message"  v-model="message">
+              <label for="message" class="form-label">Digite o ID para quem deseja enviar a mensagem</label>
+              <input type="text" class="form-control" id="message" v-model="receiverId">
             </div>
-            <button type="button" class="btn btn-primary" @click="sendMessage">Enviar Mensagem</button>
+            <div class="mb-3">
+              <label for="message" class="form-label">Digite seu texto para mensagem</label>
+              <input type="text" class="form-control" id="message" v-model="message">
+            </div>
+            <button type="button" class="btn btn-primary" @click="makeChat">Criar Chat</button>
+            <button type="button" class="btn btn-primary mx-4" @click="sendMessage">Enviar Mensagem</button>
           </form>
         </div>
       </div>
-      <div class="row">
-        <div class="col-12">
-          <span> {{ message }}</span>
+      <div class="row d-flex justify-content-center align-items-center">
+        <div class="col-6 d-flex justify-content-start align-items-center flex-column text-white">
+          <div class="align-self-start" >
+          <span class="badge rounded-pill text-bg-primary"> enviada:</span>
+           {{ message }}
+          </div>
+          <div class="align-self-start" >
+            <span class="badge rounded-pill text-bg-warning">received: </span>
+            {{ receivedMessages }}
+          </div>
+
         </div>
       </div>
     </div>
